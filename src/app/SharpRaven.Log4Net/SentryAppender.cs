@@ -5,6 +5,7 @@ using SharpRaven.Data;
 using SharpRaven.Log4Net.Extra;
 using log4net.Appender;
 using log4net.Core;
+using log4net.Util;
 
 namespace SharpRaven.Log4Net
 {
@@ -29,7 +30,8 @@ namespace SharpRaven.Log4Net
                         ravenClient = new RavenClient(DSN)
                         {
                             Logger = this.Logger,
-                            Release = this.Release
+                            Release = this.Release,
+                            ErrorOnCapture = ex => LogLog.Error(typeof(SentryAppender), "[" + Name + "] " + ex.Message, ex)
                         };
                     }
                 }
