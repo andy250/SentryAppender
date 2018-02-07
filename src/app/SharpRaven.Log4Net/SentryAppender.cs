@@ -1,29 +1,52 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-
-using log4net.Layout;
-
 using SharpRaven.Data;
 using SharpRaven.Log4Net.Extra;
-
 using log4net.Appender;
 using log4net.Core;
 
 namespace SharpRaven.Log4Net
 {
-    public class SentryTag
-    {
-        public string Name { get; set; }
-        public IRawLayout Layout { get; set; }
-    }
-
     public class SentryAppender : AppenderSkeleton
     {
-        private static RavenClient ravenClient;
+        private readonly object clientLocker = new object();
+        private RavenClient ravenClient;
+
         public string DSN { get; set; }
         public string Logger { get; set; }
+        public string Release { get; set; }
         private readonly IList<SentryTag> tagLayouts = new List<SentryTag>();
+
+        private RavenClient GetRavenClient()
+        {
+            if (ravenClient == null)
+            {
+                lock (clientLocker)
+                {
+                    if (ravenClient == null)
+                    {
+                        ravenClient = new RavenClient(DSN)
+                        {
+                            Logger = this.Logger,
+                            Release = this.Release
+                        };
+                    }
+                }
+            }
+
+            return ravenClient;
+        }
+
+        public void SetLoggingErrorHandler(Action<Exception> handler)
+        {
+            GetRavenClient().ErrorOnCapture = handler;
+        }
+
+        public void SetBeforeSendHandler(Func<Requester, Requester> handler)
+        {
+            GetRavenClient().BeforeSend = handler;
+        }
 
         public void AddTag(SentryTag tag)
         {
@@ -32,14 +55,6 @@ namespace SharpRaven.Log4Net
 
         protected override void Append(LoggingEvent loggingEvent)
         {
-            if (ravenClient == null)
-            {
-                ravenClient = new RavenClient(DSN)
-                {
-                    Logger = Logger
-                };
-            }
-
             var httpExtra = HttpExtra.GetHttpExtra();
             object extra;
 
@@ -48,37 +63,54 @@ namespace SharpRaven.Log4Net
                 extra = new
                 {
                     Environment = new EnvironmentExtra(),
-                    Http = httpExtra
+                    Http = httpExtra,
+                    AppMessage = loggingEvent.RenderedMessage
                 };
             }
             else
             {
                 extra = new
                 {
-                    Environment = new EnvironmentExtra()
+                    Environment = new EnvironmentExtra(),
+                    AppMessage = loggingEvent.RenderedMessage
                 };
             }
 
-            var tags = tagLayouts.ToDictionary(t => t.Name, t => (t.Layout.Format(loggingEvent) ?? "").ToString());
+            var tags = tagLayouts.ToDictionary(t => t.Name, t => (t.Layout.Format(loggingEvent) ?? string.Empty).ToString());
 
             var exception = loggingEvent.ExceptionObject ?? loggingEvent.MessageObject as Exception;
             var level = Translate(loggingEvent.Level);
 
+            SentryEvent sentryEvent;
+
             if (exception != null)
             {
-                ravenClient.CaptureException(exception, null, level, tags: tags, extra: extra);
+                sentryEvent = new SentryEvent(exception);
             }
             else
             {
                 var message = loggingEvent.RenderedMessage;
-
-                if (message != null)
+                if (string.IsNullOrWhiteSpace(message))
                 {
-                    ravenClient.CaptureMessage(message, level, tags, extra);
+                    message = "No message";
                 }
+                sentryEvent = new SentryEvent(new SentryMessage(message));
             }
+
+            sentryEvent.Extra = extra;
+            sentryEvent.Tags = tags;
+            sentryEvent.Level = level;
+
+            GetRavenClient().Capture(sentryEvent);
         }
 
+        protected override void Append(LoggingEvent[] loggingEvents)
+        {
+            foreach (var loggingEvent in loggingEvents)
+            {
+                Append(loggingEvent);
+            }
+        }
 
         internal static ErrorLevel Translate(Level level)
         {
@@ -94,17 +126,8 @@ namespace SharpRaven.Log4Net
             ErrorLevel errorLevel;
 
             return !Enum.TryParse(level.DisplayName, true, out errorLevel)
-                       ? ErrorLevel.Error
-                       : errorLevel;
-        }
-
-
-        protected override void Append(LoggingEvent[] loggingEvents)
-        {
-            foreach (var loggingEvent in loggingEvents)
-            {
-                Append(loggingEvent);
-            }
+                ? ErrorLevel.Error
+                : errorLevel;
         }
     }
 }
