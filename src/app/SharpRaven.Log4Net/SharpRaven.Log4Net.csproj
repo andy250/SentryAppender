@@ -47,7 +47,6 @@
     <Reference Include="System" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Extra\EnvironmentExtra.cs" />
     <Compile Include="Extra\HttpExtra.cs" />
     <Compile Include="Extra\SentryTags.cs" />
     <Compile Include="SentryAppender.cs" />

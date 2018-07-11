@@ -64,7 +64,6 @@ namespace SharpRaven.Log4Net
             {
                 extra = new
                 {
-                    Environment = new EnvironmentExtra(),
                     Http = httpExtra,
                     AppMessage = loggingEvent.RenderedMessage
                 };
@@ -73,7 +72,6 @@ namespace SharpRaven.Log4Net
             {
                 extra = new
                 {
-                    Environment = new EnvironmentExtra(),
                     AppMessage = loggingEvent.RenderedMessage
                 };
             }

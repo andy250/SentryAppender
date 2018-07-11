@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Linq;
@@ -21,8 +21,11 @@ namespace SharpRaven.Log4Net.Extra
         public static HttpExtra GetHttpExtra()
         {
             var context = GetHttpContext();
+
             if (context == null)
+            {
                 return null;
+            }
 
             return new HttpExtra(context);
         }
@@ -75,7 +78,7 @@ namespace SharpRaven.Log4Net.Extra
             {
                 return new
                 {
-                    ServerVariables = Convert(x => x.Request.ServerVariables),
+                    //ServerVariables = Convert(x => x.Request.ServerVariables),
                     Form = Convert(x => x.Request.Form),
                     Cookies = Convert(x => x.Request.Cookies, GetValueFromCookieCollection),
                     Headers = Convert(x => x.Request.Headers),
@@ -106,7 +109,7 @@ namespace SharpRaven.Log4Net.Extra
                         Host = new
                         {
                             Address = this.httpContext.Request.UserHostAddress,
-                            Name = this.httpContext.Request.UserHostName,
+                            Name = this.httpContext.Request.UserHostName
                         }
                     }
                 };
@@ -161,12 +164,14 @@ namespace SharpRaven.Log4Net.Extra
 
                 foreach (var key in collection.Keys)
                 {
-                    // NOTE: Ignore these keys as they just add duplicate information. [asbjornu]
-                    if (key == "ALL_HTTP" || key == "ALL_RAW")
-                        continue;
+                    var sKey = key.ToString();
 
-                    var value = valueFromCollectionGetter(collection, key);
-                    dictionary.Add(key.ToString(), value);
+                    // NOTE: Ignore these keys as they just add duplicate information. [asbjornu]
+                    if (sKey != "ALL_HTTP" && sKey != "ALL_RAW" && !sKey.StartsWith("HTTPS_") && !sKey.StartsWith("CERT_"))
+                    {
+                        var value = valueFromCollectionGetter(collection, key);
+                        dictionary.Add(key.ToString(), value);
+                    }
                 }
             }
             catch (Exception exception)
